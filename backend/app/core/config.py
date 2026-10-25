@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "AI Code Evaluator"
     APP_ENV: str = "development"
     DEBUG: bool = True
-    PORT: int = 8000
+    PORT: int = 8001
     HOST: str = "0.0.0.0"
     SECRET_KEY: str = "dev-secret-key-evaluator-2026-secure-random-token-xyz"
     
@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     DOCKER_IMAGE_NAME: str = "code-evaluator-sandbox:latest"
     
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5174,http://localhost:5173,http://localhost:3000"
     
     @property
     def cors_origins_list(self) -> List[str]:
