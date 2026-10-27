@@ -5,6 +5,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
+def utcnow():
+    return datetime.datetime.now(datetime.timezone.utc)
+
 class User(Base):
     __tablename__ = "users"
 
@@ -13,7 +16,7 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), default="user", nullable=False)  # 'admin', 'reviewer', 'user'
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     submissions = relationship("Submission", back_populates="user")
     reviews = relationship("HumanReview", back_populates="reviewer")
@@ -35,8 +38,8 @@ class Problem(Base):
     input_format = Column(Text, nullable=True)
     output_format = Column(Text, nullable=True)
     constraints = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     test_cases = relationship("TestCase", back_populates="problem", cascade="all, delete-orphan")
     submissions = relationship("Submission", back_populates="problem", cascade="all, delete-orphan")
@@ -88,7 +91,7 @@ class Submission(Base):
     stdout = Column(Text, nullable=True)
     stderr = Column(Text, nullable=True)
     sandbox_mode = Column(String(50), default="auto", nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     problem = relationship("Problem", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
@@ -136,7 +139,7 @@ class AIEvaluation(Base):
     optimization_suggestions = Column(JSON, default=list, nullable=False)
     confidence = Column(Float, default=1.0, nullable=False)
     raw_response = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     submission = relationship("Submission", back_populates="ai_evaluation")
 
@@ -161,7 +164,7 @@ class SolutionComparison(Base):
     # Human override
     human_override_preferred = Column(String(10), nullable=True)  # 'A', 'B', 'tie'
     human_override_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
 class Rubric(Base):
     __tablename__ = "rubrics"
@@ -172,7 +175,7 @@ class Rubric(Base):
     criteria_weights = Column(JSON, default=dict, nullable=False)
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     reviews = relationship("HumanReview", back_populates="rubric")
 
@@ -194,8 +197,8 @@ class HumanReview(Base):
     rationale = Column(Text, nullable=False)
     status = Column(String(20), default="completed", nullable=False)  # 'draft', 'completed'
     ambiguity_reported = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     submission = relationship("Submission", back_populates="human_reviews")
     reviewer = relationship("User", back_populates="reviews")
@@ -211,7 +214,7 @@ class ReviewHistory(Base):
     previous_state = Column(JSON, nullable=False)
     new_state = Column(JSON, nullable=False)
     change_reason = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     review = relationship("HumanReview", back_populates="history")
 
@@ -224,7 +227,7 @@ class Dataset(Base):
     version = Column(String(20), default="1.0.0", nullable=False)
     record_count = Column(Integer, default=0, nullable=False)
     metadata_json = Column(JSON, default=dict, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     records = relationship("DatasetRecord", back_populates="dataset", cascade="all, delete-orphan")
 
@@ -238,7 +241,7 @@ class DatasetRecord(Base):
     ai_evaluation_id = Column(Integer, ForeignKey("ai_evaluations.id"), nullable=True, index=True)
     record_json = Column(JSON, nullable=False)
     provenance_hash = Column(String(64), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     dataset = relationship("Dataset", back_populates="records")
 
@@ -251,4 +254,4 @@ class AuditEvent(Base):
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(Integer, nullable=True)
     details_json = Column(JSON, default=dict, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)

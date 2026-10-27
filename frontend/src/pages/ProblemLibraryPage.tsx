@@ -2,18 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   BookOpen, 
-  Search, 
   Plus, 
   ArrowRight, 
   Trash2, 
   Clock, 
   Layers, 
   Tag, 
-  X,
-  CheckCircle2
+  X
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Problem, Difficulty } from '../types';
+import { GlassPanel } from '../components/common/GlassPanel';
+import { GlassCard } from '../components/common/GlassCard';
+import { SearchFilterBar } from '../components/common/SearchFilterBar';
+import { SkeletonCard } from '../components/common/LoadingSkeleton';
 
 export const ProblemLibraryPage: React.FC = () => {
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -38,7 +40,10 @@ export const ProblemLibraryPage: React.FC = () => {
 
   const loadProblems = () => {
     setLoading(true);
-    api.getProblems({ search: search || undefined, difficulty: difficultyFilter !== 'all' ? difficultyFilter : undefined })
+    api.getProblems({ 
+      search: search || undefined, 
+      difficulty: difficultyFilter !== 'all' ? difficultyFilter : undefined 
+    })
       .then((res) => {
         setProblems(res.items);
         setLoading(false);
@@ -52,11 +57,6 @@ export const ProblemLibraryPage: React.FC = () => {
   useEffect(() => {
     loadProblems();
   }, [difficultyFilter]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadProblems();
-  };
 
   const handleDelete = async (id: number) => {
     if (confirm('Are you sure you want to delete this problem?')) {
@@ -86,7 +86,6 @@ export const ProblemLibraryPage: React.FC = () => {
         test_cases: testCases as any
       });
       setShowCreateModal(false);
-      // Reset form
       setNewTitle('');
       setNewSlug('');
       setNewDesc('');
@@ -103,30 +102,30 @@ export const ProblemLibraryPage: React.FC = () => {
   const getDifficultyBadge = (diff: Difficulty) => {
     switch (diff) {
       case 'easy':
-        return 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60';
+        return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
       case 'medium':
-        return 'bg-amber-950/60 text-amber-400 border-amber-800/60';
+        return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
       case 'hard':
-        return 'bg-rose-950/60 text-rose-400 border-rose-800/60';
+        return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
-            <BookOpen className="w-7 h-7 text-indigo-400" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+            <BookOpen className="w-7 h-7 text-indigo-500" />
             Problem Library
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Standard algorithmic challenges with public examples and isolated hidden evaluation suites.
+          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
+            Standard algorithmic challenges with public examples and hardened hidden test suites.
           </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm shadow-lg shadow-indigo-600/25 transition-all self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-medium text-sm shadow-lg shadow-indigo-600/25 transition-all self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>New Problem</span>
@@ -134,63 +133,60 @@ export const ProblemLibraryPage: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4">
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search problems by title, keywords, or tags..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-          />
-        </form>
-
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          {['all', 'easy', 'medium', 'hard'].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDifficultyFilter(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
-                difficultyFilter === d
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-700/50 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SearchFilterBar
+        search={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          // auto filter after small debounce or direct call
+          setTimeout(loadProblems, 200);
+        }}
+        placeholder="Search problems by title, keywords, or tags..."
+        filters={[
+          {
+            id: 'difficulty',
+            label: 'Difficulty',
+            value: difficultyFilter,
+            onChange: (val) => setDifficultyFilter(val),
+            options: [
+              { label: 'All Difficulties', value: 'all' },
+              { label: 'Easy', value: 'easy' },
+              { label: 'Medium', value: 'medium' },
+              { label: 'Hard', value: 'hard' },
+            ]
+          }
+        ]}
+      />
 
       {/* Problem Cards Grid */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       ) : problems.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {problems.map((p) => (
-            <div
+            <GlassCard
               key={p.id}
-              className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-600 transition-all shadow-sm group"
+              className="flex flex-col justify-between group transition-all duration-300"
             >
               <div>
                 <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className={`px-2.5 py-0.5 rounded-md text-xs font-semibold capitalize border ${getDifficultyBadge(p.difficulty)}`}>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize border ${getDifficultyBadge(p.difficulty)}`}>
                     {p.difficulty}
                   </span>
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-mono">
                     <Clock className="w-3.5 h-3.5" />
                     <span>{p.time_limit_seconds}s limit</span>
                   </div>
                 </div>
 
-                <h3 className="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {p.title}
                 </h3>
 
-                <p className="text-slate-400 text-xs mt-2 line-clamp-3 leading-relaxed">
+                <p className="text-slate-600 dark:text-slate-400 text-xs mt-2 line-clamp-3 leading-relaxed">
                   {p.description}
                 </p>
 
@@ -199,9 +195,9 @@ export const ProblemLibraryPage: React.FC = () => {
                     {p.tags.split(',').map((t, idx) => (
                       <span
                         key={idx}
-                        className="flex items-center gap-1 text-[11px] text-slate-400 bg-slate-700/40 px-2 py-0.5 rounded border border-slate-600/40"
+                        className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 px-2 py-0.5 rounded-md border border-[var(--border-glass)]"
                       >
-                        <Tag className="w-2.5 h-2.5 text-indigo-400" />
+                        <Tag className="w-2.5 h-2.5 text-indigo-500" />
                         {t.trim()}
                       </span>
                     ))}
@@ -209,41 +205,46 @@ export const ProblemLibraryPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center justify-between pt-5 mt-5 border-t border-slate-700/60">
+              <div className="flex items-center justify-between pt-5 mt-5 border-t border-slate-200/50 dark:border-slate-800/60">
                 <button
                   onClick={() => handleDelete(p.id)}
-                  className="text-slate-500 hover:text-rose-400 p-1.5 rounded hover:bg-slate-700/40 transition-colors"
+                  className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
                   title="Delete problem"
+                  aria-label="Delete problem"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
 
                 <Link
                   to={`/workspace?problem=${p.slug}`}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer"
                 >
                   <span>Solve Problem</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
-            </div>
+            </GlassCard>
           ))}
         </div>
       ) : (
-        <div className="text-center py-20 bg-slate-800/30 border border-slate-800 rounded-2xl">
-          <Layers className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-          <h3 className="text-base font-semibold text-slate-300">No problems found</h3>
+        <GlassPanel className="text-center py-20">
+          <Layers className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-600 mb-3" />
+          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No problems found</h3>
           <p className="text-xs text-slate-500 mt-1">Try adjusting your search criteria or create a new problem.</p>
-        </div>
+        </GlassPanel>
       )}
 
       {/* Modal: Create Problem */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-5 my-8 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h2 className="text-lg font-bold text-white">Create New Coding Problem</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-fade-in">
+          <GlassPanel elevated className="max-w-2xl w-full p-6 space-y-5 my-8 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[var(--border-glass)] pb-4">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Create New Coding Problem</h2>
+              <button 
+                onClick={() => setShowCreateModal(false)} 
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+                aria-label="Close modal"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -251,91 +252,91 @@ export const ProblemLibraryPage: React.FC = () => {
             <form onSubmit={handleCreateProblem} className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Title</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Title</label>
                   <input
                     type="text"
                     required
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="e.g. Reverse Linked List"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-100/70 dark:bg-slate-900/60 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Difficulty</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Difficulty</label>
                   <select
                     value={newDifficulty}
                     onChange={(e) => setNewDifficulty(e.target.value as Difficulty)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-100/70 dark:bg-slate-900/60 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
+                    <option value="easy" className="bg-slate-900 text-white">Easy</option>
+                    <option value="medium" className="bg-slate-900 text-white">Medium</option>
+                    <option value="hard" className="bg-slate-900 text-white">Hard</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Problem Description</label>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Problem Description</label>
                 <textarea
                   required
                   rows={3}
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   placeholder="Describe problem requirements, input/output specifications, and constraints..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-100/70 dark:bg-slate-900/60 border border-[var(--border-glass)] rounded-xl p-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Function Name (Optional)</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Function Name (Optional)</label>
                   <input
                     type="text"
                     value={newFunctionName}
                     onChange={(e) => setNewFunctionName(e.target.value)}
                     placeholder="e.g. solve"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-100/70 dark:bg-slate-900/60 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Tags (comma separated)</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tags (comma separated)</label>
                   <input
                     type="text"
                     value={newTags}
                     onChange={(e) => setNewTags(e.target.value)}
                     placeholder="e.g. String, Recursion"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-100/70 dark:bg-slate-900/60 border border-[var(--border-glass)] rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Starter Code Template</label>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Starter Code Template</label>
                 <textarea
                   rows={3}
                   value={newStarterCode}
                   onChange={(e) => setNewStarterCode(e.target.value)}
                   placeholder="def solve(x):&#10;    # Write solution here&#10;    pass"
-                  className="w-full font-mono text-xs bg-slate-800 border border-slate-700 rounded-lg p-3 text-emerald-400 focus:outline-none focus:border-indigo-500"
+                  className="w-full font-mono text-xs bg-slate-100/70 dark:bg-slate-900/60 border border-[var(--border-glass)] rounded-xl p-3 text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
               </div>
 
               {/* Test Cases Editor */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-slate-400">Test Cases (Public & Hidden)</label>
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Test Cases (Public & Hidden)</label>
                   <button
                     type="button"
                     onClick={() => setTestCases([...testCases, { input_data: '', expected_output: '', is_hidden: true, explanation: '' }])}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
                   >
                     + Add Test Case
                   </button>
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {testCases.map((tc, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700">
+                    <div key={idx} className="flex items-center gap-2 bg-slate-200/50 dark:bg-slate-800/80 p-2 rounded-xl border border-[var(--border-glass)]">
                       <input
                         type="text"
                         placeholder="Input (e.g. [1, 2])"
@@ -345,7 +346,7 @@ export const ProblemLibraryPage: React.FC = () => {
                           copy[idx].input_data = e.target.value;
                           setTestCases(copy);
                         }}
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                        className="flex-1 bg-white/70 dark:bg-slate-900/80 border border-[var(--border-glass)] rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white"
                       />
                       <input
                         type="text"
@@ -356,9 +357,9 @@ export const ProblemLibraryPage: React.FC = () => {
                           copy[idx].expected_output = e.target.value;
                           setTestCases(copy);
                         }}
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                        className="flex-1 bg-white/70 dark:bg-slate-900/80 border border-[var(--border-glass)] rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white"
                       />
-                      <label className="flex items-center gap-1 text-xs text-slate-300 cursor-pointer">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={tc.is_hidden}
@@ -376,23 +377,23 @@ export const ProblemLibraryPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-glass)]">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-200/60 dark:bg-slate-800/60 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer"
                 >
                   Save Problem
                 </button>
               </div>
             </form>
-          </div>
+          </GlassPanel>
         </div>
       )}
     </div>

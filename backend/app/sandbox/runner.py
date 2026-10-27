@@ -10,15 +10,23 @@ class SandboxManager:
 
     def get_sandbox(self) -> BaseSandbox:
         mode = settings.SANDBOX_MODE.lower()
-        if mode == "docker":
+
+        # Strict container isolation / fail-closed
+        if mode in ["docker", "fail_closed"]:
             return self.docker_sandbox
-        elif mode == "subprocess":
+
+        if mode == "subprocess":
             return self.subprocess_sandbox
-        else:
-            # Auto: prefer docker if running, fallback to subprocess
-            if self.docker_sandbox.is_available():
-                return self.docker_sandbox
-            return self.subprocess_sandbox
+
+        # Auto mode:
+        # In production, require container isolation (fail-closed if docker daemon unreachable)
+        if settings.APP_ENV.lower() == "production":
+            return self.docker_sandbox
+
+        # In local development, prefer docker if running, fallback to hardened subprocess
+        if self.docker_sandbox.is_available():
+            return self.docker_sandbox
+        return self.subprocess_sandbox
 
     def is_docker_available(self) -> bool:
         return self.docker_sandbox.is_available()

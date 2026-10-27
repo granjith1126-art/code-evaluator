@@ -1,5 +1,6 @@
 import pytest
 import time
+import os
 from app.sandbox.runner import sandbox_manager
 
 def test_infinite_loop_timeout():
@@ -43,14 +44,12 @@ def test_output_size_truncation():
         function_name="solve",
         timeout_seconds=2.0
     )
-    # Output should execute and truncate if over max limit
     assert res.status in ["Accepted", "Wrong Answer"]
 
 def test_memory_bomb_protection():
     sandbox = sandbox_manager.get_sandbox()
     code = """def solve():
-    # Attempt to allocate excessive memory
-    a = [0] * (100 * 1024 * 1024)  # ~800MB
+    a = [0] * (100 * 1024 * 1024)
     return len(a)
 """
     res = sandbox.execute(
@@ -60,5 +59,32 @@ def test_memory_bomb_protection():
         timeout_seconds=2.0,
         memory_limit_mb=64
     )
-    # Process must terminate with Memory Limit Exceeded, Runtime Error (MemoryError), or ProcessAborted
     assert res.status in ["Memory Limit Exceeded", "Runtime Error", "Infrastructure Error"]
+
+def test_env_secrets_not_leaked_to_untrusted_code():
+    """
+    CRITICAL SECURITY TEST:
+    Verify that untrusted submitted code cannot read host environment variables
+    containing API keys, database credentials, or secret keys.
+    """
+    sandbox = sandbox_manager.get_sandbox()
+    code = """import os
+
+def solve():
+    # Attempt to read sensitive keys from environment
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    secret_key = os.environ.get("SECRET_KEY", "")
+    db_url = os.environ.get("DATABASE_URL", "")
+    return [openai_key, gemini_key, secret_key, db_url]
+"""
+    res = sandbox.execute(
+        code=code,
+        test_cases=[{"id": 1, "input_data": "[]", "expected_output": '["", "", "", ""]', "test_type": "function", "is_hidden": False}],
+        function_name="solve",
+        timeout_seconds=2.0
+    )
+    assert res.status == "Accepted"
+    # All sensitive keys must be completely empty inside the execution boundary
+    import ast
+    assert ast.literal_eval(res.results[0]["actual_output"]) == ["", "", "", ""]

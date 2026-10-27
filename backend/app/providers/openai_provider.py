@@ -1,23 +1,39 @@
 import json
 import re
+import time
+import logging
 from typing import Dict, Any, List, Optional
 from app.providers.base import BaseAIProvider
 
+logger = logging.getLogger(__name__)
+
 class OpenAIProvider(BaseAIProvider):
+    """
+    OpenAI Provider integration with robust error classification:
+    - Distinguishes between transient rate-limits (retryable with backoff) and quota exhaustion (429 insufficient_quota, fail-fast)
+    - Prompt hardening: strictly treats submitted code as untrusted input data
+    - Structured JSON response parsing
+    """
+
     def __init__(self, api_key: Optional[str], model: str = "gpt-4o", timeout_seconds: int = 45):
         self.api_key = api_key
         self.model = model
         self.timeout_seconds = timeout_seconds
         self._client = None
+        self._quota_exhausted = False
         if self.api_key:
             try:
                 from openai import OpenAI
                 self._client = OpenAI(api_key=self.api_key, timeout=float(timeout_seconds))
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to initialize OpenAI client: {e}")
                 self._client = None
 
     def is_configured(self) -> bool:
         return bool(self.api_key and self._client)
+
+    def is_quota_exhausted(self) -> bool:
+        return self._quota_exhausted
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         text = text.strip()
@@ -85,18 +101,25 @@ Return ONLY a valid JSON object matching this schema:
   "confidence": float (0.0 to 1.0)
 }}
 """
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} if "gpt-4o" in self.model else None,
-            max_tokens=2048,
-        )
-        raw_text = response.choices[0].message.content or "{}"
-        parsed = self._extract_json(raw_text)
-        parsed["provider"] = "openai"
-        parsed["model"] = self.model
-        parsed["raw_response"] = raw_text[:500]
-        return parsed
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"} if "gpt-4o" in self.model else None,
+                max_tokens=2048,
+            )
+            raw_text = response.choices[0].message.content or "{}"
+            parsed = self._extract_json(raw_text)
+            parsed["provider"] = "openai"
+            parsed["model"] = self.model
+            parsed["raw_response"] = raw_text[:500]
+            return parsed
+        except Exception as e:
+            err_str = str(e).lower()
+            if "insufficient_quota" in err_str or "no credits remaining" in err_str or "billing" in err_str:
+                self._quota_exhausted = True
+                raise RuntimeError("OpenAI Quota Exhausted: Account credit limit reached. Add credits at https://platform.openai.com/settings/billing.") from e
+            raise
 
     def compare_solutions(
         self,
@@ -136,14 +159,21 @@ Return ONLY a valid JSON object with:
   "confidence": float (0.0 to 1.0)
 }}
 """
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} if "gpt-4o" in self.model else None,
-            max_tokens=1500,
-        )
-        raw_text = response.choices[0].message.content or "{}"
-        parsed = self._extract_json(raw_text)
-        parsed["provider"] = "openai"
-        parsed["model"] = self.model
-        return parsed
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"} if "gpt-4o" in self.model else None,
+                max_tokens=1500,
+            )
+            raw_text = response.choices[0].message.content or "{}"
+            parsed = self._extract_json(raw_text)
+            parsed["provider"] = "openai"
+            parsed["model"] = self.model
+            return parsed
+        except Exception as e:
+            err_str = str(e).lower()
+            if "insufficient_quota" in err_str or "no credits remaining" in err_str or "billing" in err_str:
+                self._quota_exhausted = True
+                raise RuntimeError("OpenAI Quota Exhausted: Account credit limit reached. Add credits at https://platform.openai.com/settings/billing.") from e
+            raise

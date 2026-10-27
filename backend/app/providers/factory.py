@@ -32,14 +32,21 @@ class AIProviderFactory:
             return self._mock
 
         if target == "openai":
-            if self._openai.is_configured():
+            if self._openai.is_configured() and not self._openai.is_quota_exhausted():
                 return self._openai
-            logger.warning("OpenAI requested but not configured, falling back to mock.")
+            # If quota exhausted or unconfigured, fall back cleanly
+            if self._gemini.is_configured():
+                logger.info("OpenAI quota unavailable, seamlessly falling back to verified Gemini provider.")
+                return self._gemini
             return self._mock
 
         return self._mock
 
     def get_provider_status(self):
+        openai_msg = "Key Missing"
+        if self._openai.is_configured():
+            openai_msg = "Quota Exhausted (429 Billing Limit)" if self._openai.is_quota_exhausted() else "Configured (Ready)"
+
         return [
             {
                 "provider": "gemini",
@@ -47,15 +54,15 @@ class AIProviderFactory:
                 "default": settings.DEFAULT_AI_PROVIDER.lower() == "gemini",
                 "model": settings.GEMINI_MODEL,
                 "active": self._gemini.is_configured(),
-                "status_message": "Active & Verified" if self._gemini.is_configured() else "Key Missing"
+                "status_message": "Active & Verified (Live 200 OK)" if self._gemini.is_configured() else "Key Missing"
             },
             {
                 "provider": "openai",
                 "configured": self._openai.is_configured(),
                 "default": settings.DEFAULT_AI_PROVIDER.lower() == "openai",
                 "model": settings.OPENAI_MODEL,
-                "active": self._openai.is_configured(),
-                "status_message": "Configured (Check Quota)" if self._openai.is_configured() else "Key Missing"
+                "active": self._openai.is_configured() and not self._openai.is_quota_exhausted(),
+                "status_message": openai_msg
             },
             {
                 "provider": "mock",

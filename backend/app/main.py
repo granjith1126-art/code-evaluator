@@ -4,10 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.core.rate_limit import RateLimiterMiddleware
 from app.api.v1.api import api_router
-from app.models import entities  # ensure models are registered with Base
+from app.models import entities
 
-# Auto-create tables for SQLite / local dev
+# Initialize database schema
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -17,6 +18,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Rate Limiter & Security Headers Middleware
+app.add_middleware(RateLimiterMiddleware)
 
 # CORS Middleware
 app.add_middleware(

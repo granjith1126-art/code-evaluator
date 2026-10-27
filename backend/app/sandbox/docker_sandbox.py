@@ -7,6 +7,20 @@ from typing import Dict, Any, List
 from app.sandbox.base import BaseSandbox, SandboxExecutionResult
 
 class DockerSandbox(BaseSandbox):
+    """
+    Hardened Docker container sandbox runner:
+    - Dedicated unprivileged user (UID 10001)
+    - Network isolated (--network none)
+    - Read-only root filesystem (--read-only)
+    - Tmpfs working storage with noexec/nosuid flags
+    - All Linux capabilities dropped (--cap-drop ALL)
+    - No privilege escalation (--security-opt no-new-privileges)
+    - Hard memory and swap ceiling (--memory, --memory-swap)
+    - Single CPU cap (--cpus 1.0)
+    - PID limit to prevent fork bombs (--pids-limit 64)
+    - Read-only input payload mount
+    """
+
     def __init__(self, image_name: str = "code-evaluator-sandbox:latest"):
         self.image_name = image_name
 
@@ -38,7 +52,7 @@ class DockerSandbox(BaseSandbox):
                 memory_usage_kb=0.0,
                 results=[],
                 error_category="DockerUnavailable",
-                error_message="Docker daemon is not reachable or not running. Please start Docker Desktop.",
+                error_message="Docker container isolation required but daemon is not reachable.",
                 sandbox_mode="docker"
             )
 
@@ -48,25 +62,26 @@ class DockerSandbox(BaseSandbox):
             "test_cases": test_cases
         }
 
-        # Create temporary payload file
         temp_dir = tempfile.mkdtemp(prefix="eval_docker_")
         payload_file = os.path.join(temp_dir, "payload.json")
         try:
             with open(payload_file, "w", encoding="utf-8") as f:
                 json.dump(payload, f)
 
-            # Strict Docker sandbox arguments
+            # Hardened Docker sandbox flags
             cmd = [
                 "docker", "run",
                 "--rm",
-                "--network", "none",                           # Completely disabled network
-                "--memory", f"{memory_limit_mb}m",             # Hard memory cap
-                "--memory-swap", f"{memory_limit_mb}m",        # No swap
-                "--cpus", "1.0",                               # Single CPU cap
-                "--pids-limit", "64",                          # Prevent fork-bombs
-                "--cap-drop", "ALL",                           # Drop all Linux capabilities
-                "--security-opt", "no-new-privileges",         # Prevent privilege escalation
-                "-v", f"{payload_file}:/workspace/payload.json:ro", # Read-only input payload
+                "--network", "none",                                       # Network completely disabled
+                "--read-only",                                             # Read-only root filesystem
+                "--tmpfs", "/workspace/tmp:rw,noexec,nosuid,size=32m",    # Scoped writable temporary directory
+                "--memory", f"{memory_limit_mb}m",                         # Strict memory ceiling
+                "--memory-swap", f"{memory_limit_mb}m",                    # No swap memory allowed
+                "--cpus", "1.0",                                           # CPU quota
+                "--pids-limit", "64",                                      # Prevent fork-bombs
+                "--cap-drop", "ALL",                                       # Drop all capabilities
+                "--security-opt", "no-new-privileges",                     # Prevent privilege escalation
+                "-v", f"{payload_file}:/workspace/payload.json:ro",       # Read-only payload
                 self.image_name,
                 "/workspace/payload.json"
             ]
@@ -81,7 +96,6 @@ class DockerSandbox(BaseSandbox):
             )
 
             if proc.returncode != 0:
-                # Check for OOM (137) or container error
                 if proc.returncode == 137:
                     return SandboxExecutionResult(
                         status="Memory Limit Exceeded",
@@ -89,7 +103,7 @@ class DockerSandbox(BaseSandbox):
                         memory_usage_kb=memory_limit_mb * 1024.0,
                         results=[],
                         error_category="MemoryLimitExceeded",
-                        error_message=f"Process exceeded memory limit of {memory_limit_mb} MB (SIGKILL 137)",
+                        error_message=f"Process exceeded memory threshold of {memory_limit_mb} MB (SIGKILL 137).",
                         sandbox_mode="docker"
                     )
                 return SandboxExecutionResult(
@@ -98,7 +112,7 @@ class DockerSandbox(BaseSandbox):
                     memory_usage_kb=0.0,
                     results=[],
                     error_category="ContainerError",
-                    error_message=f"Docker container returned exit code {proc.returncode}: {proc.stderr}",
+                    error_message=f"Container execution failed with exit code {proc.returncode}: {proc.stderr}",
                     stderr=proc.stderr,
                     sandbox_mode="docker"
                 )

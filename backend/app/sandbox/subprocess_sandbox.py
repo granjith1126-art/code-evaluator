@@ -10,9 +10,17 @@ from typing import Dict, Any, List
 from app.sandbox.base import BaseSandbox, SandboxExecutionResult
 
 class SubprocessSandbox(BaseSandbox):
+    """
+    Subprocess sandbox runner with security hardening:
+    - Sanitized minimal environment (host secrets, API keys, database credentials excluded)
+    - Temporary execution workspace with automatic cleanup
+    - Real-time RSS memory tracking via psutil with SIGKILL on threshold breach
+    - Wall-clock timeout watchdog killing process tree
+    - Output truncation at max_output_bytes to prevent memory exhaustion
+    """
+
     def __init__(self, runner_path: str = None, max_output_bytes: int = 65536):
         if runner_path is None:
-            # Locate execution/runner.py relative to backend
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
             self.runner_path = os.path.join(base_dir, "execution", "runner.py")
         else:
@@ -37,7 +45,7 @@ class SubprocessSandbox(BaseSandbox):
                 memory_usage_kb=0.0,
                 results=[],
                 error_category="RunnerNotFound",
-                error_message=f"Runner script not found at {self.runner_path}",
+                error_message=f"Execution runner not found at {self.runner_path}",
                 sandbox_mode="subprocess"
             )
 
@@ -50,26 +58,38 @@ class SubprocessSandbox(BaseSandbox):
         temp_dir = tempfile.mkdtemp(prefix="eval_subp_")
         payload_file = os.path.join(temp_dir, "payload.json")
 
+        # SECURITY: Sanitized minimal environment. NO host secrets, database URLs, or API keys!
+        sanitized_env = {
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", r"C:\Windows"),
+            "WINDIR": os.environ.get("WINDIR", r"C:\Windows"),
+            "PATH": os.environ.get("PATH", ""),
+            "PYTHONPATH": os.path.dirname(self.runner_path),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUNBUFFERED": "1",
+            "TEMP": temp_dir,
+            "TMP": temp_dir,
+        }
+
         try:
             with open(payload_file, "w", encoding="utf-8") as f:
                 json.dump(payload, f)
 
             start_time = time.perf_counter()
-            
-            # Spawn isolated python process
+
+            # Spawn isolated python process with sanitized environment
             proc = subprocess.Popen(
                 [sys.executable, self.runner_path, payload_file],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=temp_dir
+                cwd=temp_dir,
+                env=sanitized_env
             )
 
-            # Monitor memory usage and timeout
             peak_memory_kb = 0.0
             timed_out = False
             oom = False
-            
+
             try:
                 ps_proc = psutil.Process(proc.pid)
             except Exception:
@@ -80,7 +100,7 @@ class SubprocessSandbox(BaseSandbox):
             while proc.poll() is None:
                 if time.time() > timeout_deadline:
                     timed_out = True
-                    proc.kill()
+                    self._kill_process_tree(proc.pid)
                     break
 
                 if ps_proc:
@@ -91,7 +111,7 @@ class SubprocessSandbox(BaseSandbox):
                             peak_memory_kb = mem_kb
                         if mem_kb > (memory_limit_mb * 1024.0):
                             oom = True
-                            proc.kill()
+                            self._kill_process_tree(proc.pid)
                             break
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
@@ -108,7 +128,7 @@ class SubprocessSandbox(BaseSandbox):
                     memory_usage_kb=round(peak_memory_kb, 2),
                     results=[],
                     error_category="TimeLimitExceeded",
-                    error_message=f"Execution timed out after {timeout_seconds} seconds (Infinite loop or slow algorithm).",
+                    error_message=f"Execution timed out after {timeout_seconds} seconds (infinite loop or algorithmic limit).",
                     sandbox_mode="subprocess"
                 )
 
@@ -119,7 +139,7 @@ class SubprocessSandbox(BaseSandbox):
                     memory_usage_kb=round(peak_memory_kb, 2),
                     results=[],
                     error_category="MemoryLimitExceeded",
-                    error_message=f"Process exceeded memory limit of {memory_limit_mb} MB.",
+                    error_message=f"Process exceeded memory threshold of {memory_limit_mb} MB.",
                     sandbox_mode="subprocess"
                 )
 
@@ -135,9 +155,8 @@ class SubprocessSandbox(BaseSandbox):
                     sandbox_mode="subprocess"
                 )
 
-            # Cap output size
             if len(stdout) > self.max_output_bytes:
-                stdout = stdout[:self.max_output_bytes] + "\n[OUTPUT TRUNCATED - SIZE LIMIT EXCEEDED]"
+                stdout = stdout[:self.max_output_bytes] + "\n[OUTPUT TRUNCATED - MAXIMUM SIZE EXCEEDED]"
 
             try:
                 data = json.loads(stdout)
@@ -168,3 +187,17 @@ class SubprocessSandbox(BaseSandbox):
         finally:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _kill_process_tree(self, pid: int):
+        """Recursively kill a process and all its children to prevent orphan runaway processes."""
+        try:
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                try:
+                    child.kill()
+                except Exception:
+                    pass
+            parent.kill()
+        except Exception:
+            pass

@@ -1,6 +1,6 @@
 # AI Code Evaluator
 
-[![CI Tests](https://img.shields.io/badge/tests-17%20passed-emerald)](https://github.com/granjith1126-art/code-evaluator)
+[![CI Tests](https://img.shields.io/badge/tests-18%20passed-emerald)](https://github.com/granjith1126-art/code-evaluator)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
@@ -20,6 +20,7 @@ An enterprise-grade platform for evaluating code submissions, testing AI-generat
 - **Pairwise Comparison Studio**: Side-by-side Monaco code comparison, automated criteria evaluation, winner preference detection, and human override tracking with mandatory audit reasons.
 - **Human Annotation & Review Studio**: Standardized rubrics with configurable criteria weights, failure classification, written rationales, and full revision history tracking.
 - **Cryptographic Dataset Generation**: Filters submissions, computes SHA-256 provenance hashes, and exports structured training corpora in standard JSON and newline-delimited JSONL formats.
+- **Glassmorphism Design System**: Modern translucent glass panels, dark/light/system theme switcher, Monaco theme sync (`vs-dark`/`vs`), responsive layouts, ambient animated glowing mesh orbs, and accessible `prefers-reduced-motion` controls.
 - **Developer-Tool Dashboard**: Real-time telemetry, pass rate trends, failure category breakdowns, and problem library management.
 
 ---
